@@ -1,0 +1,24 @@
+<html>
+    <head>
+        <title>Test page</title>
+        <script type="text/javascript" src="speech.js"></script>
+        <script type="text/javascript" src="demo.js"></script>
+        <style type="text/css">
+            span.ttshln {
+                background-color: #99CCFF;
+            }
+        </style>
+    </head>
+    <body>
+        <form>
+            <textarea id="speechInput" rows="20" cols="60">Enter HTML markup to speak here.</textarea>
+        </form>
+        <p>
+        <input type="button" value="Start reading" id="speakButton">
+        <input type="button" value="Stop reading" id="stopButton">
+        </p>
+        <div id="speechDisplay" style="border: 1px solid black; width: 80%;">
+        Text to speech highlighting demo.
+        </div>
+    </body>
+</html>
