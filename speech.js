@@ -1,6 +1,8 @@
 var BeneSpeak = {
     
-    'BLOCK_DELIMITERS' : ['p', 'div', 'pagenum'],
+    'BLOCK_DELIMITERS' : ['p', 'div', 'pagenum', 'td', 'table', 'li', 'ul', 'ol'],
+    'BOUNDARY_PUNCTUATION' : [',', ';', '.', '-', 'Ð', 'Ñ', '?', '!'],
+    'IGNORABLE_PUNCTUATION' : ['"', '\'', 'Ò', 'Ó', 'Ô', 'Õ'],
 
     '_tokenize' : function(element) {
         var r = { 'src' : element, 'spanMap' : {}, 'text' : "", 'ttsMarkup' : "", 'markup' : element.innerHTML, 'lastOffset' : null};
@@ -23,11 +25,14 @@ var BeneSpeak = {
                 t.html += raw[i];
                 if (raw[i] == ">") {
                     t.inTag = false;
-                    
-                    // if it's a block element delimiter,
-                    // add a space to the plain text, and flush
-                    // the accumulators
-                    var tagCheck = t.html.match(/<\/(.*?)>$/);
+                    // if it's a block element delimiter, flush
+                    var blockCheck = t.html.match(/<\/(.*?)>$/);
+                    if (blockCheck != null) {
+                        if (this.BLOCK_DELIMITERS.indexOf(blockCheck[1]) > -1) {
+                            this._flush(t, r);
+                            t.text += ' ';
+                        }
+                    }
                 }
             } else {
                 if (i == limit || raw[i].match(/\s/)) {
@@ -38,6 +43,17 @@ var BeneSpeak = {
                         t.text += raw[i];
                         t.markup += raw[i];
                     }
+                }
+                else if (this.BOUNDARY_PUNCTUATION.indexOf(raw[i]) > -1) {
+                    this._flush(t, r);
+                    
+                    t.wsIdx = t.html.length;
+                    t.weIdx = t.html.length + 1;
+                    t.word += raw[i];
+                    t.html += raw[i];
+                    
+                    this._flush(t, r);
+                    
                 } else if (raw[i] == "<") {
                     t.inTag = true;
                     t.html += raw[i];
@@ -94,12 +110,10 @@ var BeneSpeak = {
                         var os = document.getElementById('tts_' + status.spanMap[status.lastOffset])
                         os.className = os.className.replace('ttshln', 'ttshlf');
                     }
-                        
                     var ts = document.getElementById('tts_' + status.spanMap[event.charIndex]);
                     ts.className = ts.className.replace('ttshlf', 'ttshln');
                     status.lastOffset = event.charIndex;
                 }
-                var word = status.text.substring(event.charIndex, status.text.indexOf(" ", event.charIndex));
             } else if (event.type == 'start') {
                 element.innerHTML = status.ttsMarkup;
             } else if (event.type == 'interrupted' || event.type == 'end') {
