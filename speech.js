@@ -2,7 +2,7 @@ var BeneSpeak = {
     
     wordHighlightClass: 'ttsWordHL',
     sentenceHighlightClass: 'ttsSentHL',
-    BOUNDARY_CHARS: /[\.\?\!\s",;\u201c\u201d\u2013\u2014]/g,
+    BOUNDARY_CHARS: /[\.,](?=\s|$)|[\!\?\s\"\;\u201c\u201d\u2013\u2014]/g,
     SENTENCE_TERMINATORS: /[\.\?\!]/,
     WORD_SEPARATORS: /[\s",;\u201c\u201d\u2013\u2014]/,
     CONDITIONAL_SEPARATORS: /'\u2018\u2019/,
@@ -11,9 +11,10 @@ var BeneSpeak = {
         this.utterance = '';
         this.words = [];
         this.sentences = [];
-        this.wordIndex = 0;
-        this.sentenceIndex = 0;
+        this._highlightedWord = -1;
+        this._highlightedSentence = -1;
         this._sipStart = null;
+        this._sipOffset = -1;
         this._wipStart = null;
         this._wordRects = [];
         this._sentenceRects = [];
@@ -64,9 +65,9 @@ var BeneSpeak = {
                 // initialize _wipStart if needed
                 if (d._wipStart == null) {
                     // seek to first non-whitespace character
-                    var nwc = /\S/.exec(t);
-                    if (nwc != null) {
-                        d._wipStart = new BeneSpeak.Position(node, nwc.index);
+                    var fnwc = /\S/.exec(t);
+                    if (fnwc != null) {
+                        d._wipStart = new BeneSpeak.Position(node, fnwc.index);
                     }
                 }
                 
@@ -75,7 +76,19 @@ var BeneSpeak = {
                     // seek ahead to find boundary characters
                     var m = this.BOUNDARY_CHARS.exec(t);
                     while (m != null) {
+                        // initialize _sipStart if needed
+                        if (d._sipStart == null) {
+                            d._sipStart = d._wipStart.copy();
+                            d._sipOffset = d.utterance.length;
+                        }
+                        
                         BeneSpeak._processWordBoundary(d, node, m);
+                        
+                        // test against sentence boundaries
+                        if (this.SENTENCE_TERMINATORS.test(m[0]) == true) {
+                            BeneSpeak._processSentenceBoundary(d, node, m);
+                        }
+                        
                         m = this.BOUNDARY_CHARS.exec(t);
                     }
                 }
@@ -88,7 +101,6 @@ var BeneSpeak = {
     
     speak: function(element, callback) {
         var data = this.generateSpeechData(element);
-        console.log(data);
         chrome.tts.speak(data.utterance, { 'rate' : 1.25, 'desiredEventTypes' : ['word'], 'onEvent' : function(event) { data.handleTtsEvent(event, callback);}});
     },
     
@@ -119,11 +131,37 @@ var BeneSpeak = {
         // moves us past the end of the textnode, null out
         // the word in progress var
         if (match.index + 1 < node.textContent.length) {
-            d._wipStart.node = node;
-            d._wipStart.offset = match.index + 1;
+            d._wipStart = new BeneSpeak.Position(node, match.index + 1);
         } else {
             d._wipStart = null;
         }
+        
+    },
+    
+    _processSentenceBoundary: function(d, node, match) {
+        
+        var r = document.createRange();
+        r.setStart(d._sipStart.node, d._sipStart.offset);
+        r.setEnd(node, match.index + 1);
+        
+        // we need to find the word whose range start
+        // matches that of this sentence.
+        var offset = 0;
+        for (var j = 0; j < d.words.length; j++) {
+            var rangeStart = d.words[j].range.startOffset;
+            if ((rangeStart.startContainer == d._sipStart.node) && (rangeStart.startOffset == d._sipStart.offset)) {
+                offset = d.words[j].offset;
+                break;
+            }
+        }
+        
+        var sent = new BeneSpeak.Fragment(r, d._sipOffset);
+        if (sent.text.length > 0) {
+            d.sentences.push(sent);
+        }
+        
+        d._sipStart = null;
+        d._sipOffset = 0;
         
     },
     
@@ -132,7 +170,6 @@ var BeneSpeak = {
         if (d._wipStart != null) {
             var r = document.createRange();
             r.setStart(d._wipStart.node, d._wipStart.offset);
-            //r.setEndBefore(blockNode.childNodes[blockNode.childNodes.length - 1]);
             r.setEndAfter(blockNode);
             
             var w = new BeneSpeak.Fragment(r, d.utterance.length);
@@ -143,6 +180,19 @@ var BeneSpeak = {
             d.utterance += w.text;
             d.utterance += '\n';
             d._wipStart = null;
+        }
+        
+        if (d._sipStart != null) {
+            var r = document.createRange();
+            r.setStart(d._sipStart.node, d._sipStart.offset);
+            r.setEndAfter(blockNode);
+            
+            var sent = new BeneSpeak.Fragment(r, d._sipOffset);
+            if (sent.text.length > 0) {
+                d.sentences.push(sent);
+            }
+            d._sipStart = null;
+            d._sipOffset = 0;
         }
     },
     
@@ -174,38 +224,58 @@ var BeneSpeak = {
         }
     },
     
-    _buildSentenceRects: function(rects) {
-    }
 };
 
-BeneSpeak.SpeechData.prototype.clearWordRects = function() {
+BeneSpeak.SpeechData.prototype.clearWordHighlight = function() {
     while (this._wordRects.length > 0) {
         document.body.removeChild(this._wordRects.pop());
     }
+    this._highlightedWord = -1;
+};
+
+BeneSpeak.SpeechData.prototype.clearSentenceHighlight = function() {
+    while (this._sentenceRects.length > 0) {
+        document.body.removeChild(this._sentenceRects.pop());
+    }
+    this._highlightedSentence = -1;
 };
 
 BeneSpeak.SpeechData.prototype.handleTtsEvent = function(event, callback) {
-    console.log(this);
+    
     if (event.type == 'word') {
         
-        while (this.wordIndex < this.words.length) {
+        for (var i = this._highlightedWord; i < this.words.length; i++) {
             
-            if (event.charIndex < this.words[this.wordIndex].offset) {
-                // char index is /before/ the selected word. hang here for now
-                break;
+            if (i >= 0) {
+                if (event.charIndex < this.words[i].offset) {
+                    // char index is /before/ the selected word. hang here for now
+                    break;
+                }
+                
+                if (this.words[i].includes(event.charIndex)) {
+                    this.highlightWord(i);
+                    break;
+                }
             }
+        }
+        
+        for (var j = this._highlightedSentence; j < this.sentences.length; j++) {
             
-            if (this.words[this.wordIndex].includes(event.charIndex)) {
-                this.buildWordRects();
-                break;
+            if (j >= 0) {
+                if (event.charIndex < this.sentences[j].offset) {
+                    break;
+                }
+                
+                if (this.sentences[j].includes(event.charIndex)) {
+                    this.highlightSentence(j);
+                    break;
+                }
             }
-            this.wordIndex++;
         }
         
     } else if (event.type == 'interrupted' || event.type == 'end') {
-        // clear highlighting
-        this.wordIndex = 0;
-        this.clearWordRects();
+        this.clearWordHighlight();
+        this.clearSentenceHighlight();
         
         if (callback != null) {
             callback();
@@ -213,24 +283,50 @@ BeneSpeak.SpeechData.prototype.handleTtsEvent = function(event, callback) {
     }    
 };
 
-BeneSpeak.SpeechData.prototype.buildWordRects = function() {
-    this.clearWordRects();
-    var rects = this.words[this.wordIndex].range.getClientRects();
-    for (var i = 0; i < rects.length; i++) {
-        var div = document.createElement('div');
-        document.body.appendChild(div);
-        div.className = BeneSpeak.wordHighlightClass;
-        div.style.position = 'absolute';
-        div.style.top = rects[i].top + window.scrollY;
-        div.style.left = rects[i].left + window.scrollX;
-        div.style.width = rects[i].width;
-        div.style.height = rects[i].height;
-        this._wordRects.push(div);
+BeneSpeak.SpeechData.prototype.highlightWord = function(idx) {
+    if (this._highlightedWord != idx) {
+        this.clearWordHighlight();
+        this._highlightedWord = idx;
+        var rects = this.words[idx].range.getClientRects();
+        for (var i = 0; i < rects.length; i++) {
+            var div = document.createElement('div');
+            document.body.appendChild(div);
+            div.className = BeneSpeak.wordHighlightClass;
+            div.style.position = 'absolute';
+            div.style.top = rects[i].top + window.scrollY;
+            div.style.left = rects[i].left + window.scrollX;
+            div.style.width = rects[i].width;
+            div.style.height = rects[i].height;
+            this._wordRects.push(div);
+        }
+    }
+};
+
+BeneSpeak.SpeechData.prototype.highlightSentence = function(idx) {
+    if (this._highlightedSentence != idx) {
+        this.clearSentenceHighlight();
+        this._highlightedSentence = idx;
+        var rects = this.sentences[idx].range.getClientRects();
+        for (var i = 0; i < rects.length; i++) {
+            var div = document.createElement('div');
+            document.body.appendChild(div);
+            div.className = BeneSpeak.sentenceHighlightClass;
+            div.style.position = 'absolute';
+            div.style.top = rects[i].top + window.scrollY;
+            div.style.left = rects[i].left + window.scrollX;
+            div.style.width = rects[i].width;
+            div.style.height = rects[i].height;
+            this._sentenceRects.push(div);
+        }
     }
 };
 
 BeneSpeak.Fragment.prototype.includes = function (index) {
-    console.log("Testing " + index + " against range " + this.offset + ":" + (this.offset + this.text.length));
     return ((index >= this.offset) && (index < (this.offset + this.text.length)));
+};
+
+BeneSpeak.Position.prototype.copy = function () {
+    var r = new BeneSpeak.Position(this.node, this.offset);
+    return r;
 };
 
