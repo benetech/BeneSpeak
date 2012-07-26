@@ -8,6 +8,7 @@ var BeneSpeak = {
     CONDITIONAL_SEPARATORS: /'\u2018\u2019/,
     
     SpeechData: function() {
+        this.document = null;
         this.utterance = '';
         this.words = [];
         this.sentences = [];
@@ -40,6 +41,9 @@ var BeneSpeak = {
     _tokenize: function(node, data) {
         
         var d = data;
+        if (d.document == null) {
+            d.document = node.ownerDocument;
+        }
         
         switch(node.nodeType) {
             case 1:
@@ -115,7 +119,7 @@ var BeneSpeak = {
     
     _processWordBoundary: function(d, node, match) {
         
-        var r = document.createRange();
+        var r = d.document.createRange();
         r.setStart(d._wipStart.node, d._wipStart.offset);
         r.setEnd(node, match.index);
         
@@ -140,7 +144,7 @@ var BeneSpeak = {
     
     _processSentenceBoundary: function(d, node, match) {
         
-        var r = document.createRange();
+        var r = d.document.createRange();
         r.setStart(d._sipStart.node, d._sipStart.offset);
         r.setEnd(node, match.index + 1);
         
@@ -168,7 +172,7 @@ var BeneSpeak = {
     _processBlockBoundary: function(d, blockNode) {
         
         if (d._wipStart != null) {
-            var r = document.createRange();
+            var r = d.document.createRange();
             r.setStart(d._wipStart.node, d._wipStart.offset);
             r.setEndAfter(blockNode);
             
@@ -183,7 +187,7 @@ var BeneSpeak = {
         }
         
         if (d._sipStart != null) {
-            var r = document.createRange();
+            var r = d.document.createRange();
             r.setStart(d._sipStart.node, d._sipStart.offset);
             r.setEndAfter(blockNode);
             
@@ -197,29 +201,31 @@ var BeneSpeak = {
     },
     
     _elementStartAnnouncement: function(d, el) {
-        if (el.tagName == 'TABLE') {
+        var tag = el.tagName.toLowerCase(); 
+        if (tag == 'table') {
             d.utterance += '\nBegin table. ';
-        } else if (el.tagName == 'TR') {
+        } else if (tag == 'tr') {
             d.utterance += '\nBegin table row. ';
-        } else if (el.tagName == 'TD') {
+        } else if (tag == 'td') {
             d.utterance += '\nTable cell. ';
-        } else if (el.tagName == 'OL') {
+        } else if (tag == 'ol') {
             d.utterance += '\nBegin ordered list. ';
-        } else if (el.tagName == 'UL') {
+        } else if (tag == 'ul') {
             d.utterance += '\nBegin list. ';
-        } else if (el.tagName == 'LI') {
+        } else if (tag == 'li') {
             d.utterance += '\nList item. ';
         }
     },
     
     _elementEndAnnouncement: function(d, el) {
-        if (el.tagName == 'TABLE') {
+        var tag = el.tagName.toLowerCase(); 
+        if (tag == 'table') {
             d.utterance += '\nEnd table. ';
-        } else if (el.tagName == 'TR') {
+        } else if (tag == 'tr') {
             d.utterance += '\nEnd table row. ';
-        } else if (el.tagName == 'OL') {
+        } else if (tag == 'ol') {
             d.utterance += '\nEnd ordered list. ';
-        } else if (el.tagName == 'UL') {
+        } else if (tag == 'ul') {
             d.utterance += '\nEnd list. ';
         }
     },
@@ -228,14 +234,14 @@ var BeneSpeak = {
 
 BeneSpeak.SpeechData.prototype.clearWordHighlight = function() {
     while (this._wordRects.length > 0) {
-        document.body.removeChild(this._wordRects.pop());
+        this.document.body.removeChild(this._wordRects.pop());
     }
     this._highlightedWord = -1;
 };
 
 BeneSpeak.SpeechData.prototype.clearSentenceHighlight = function() {
     while (this._sentenceRects.length > 0) {
-        document.body.removeChild(this._sentenceRects.pop());
+        this.document.body.removeChild(this._sentenceRects.pop());
     }
     this._highlightedSentence = -1;
 };
@@ -289,14 +295,14 @@ BeneSpeak.SpeechData.prototype.highlightWord = function(idx) {
         this._highlightedWord = idx;
         var rects = this.words[idx].range.getClientRects();
         for (var i = 0; i < rects.length; i++) {
-            var div = document.createElement('div');
-            document.body.appendChild(div);
+            var div = this.document.createElement('div');
+            this.document.body.appendChild(div);
             div.className = BeneSpeak.wordHighlightClass;
             div.style.position = 'absolute';
-            div.style.top = rects[i].top + window.scrollY;
-            div.style.left = rects[i].left + window.scrollX;
-            div.style.width = rects[i].width;
-            div.style.height = rects[i].height;
+            div.style.top = rects[i].top + window.scrollY + 'px';
+            div.style.left = rects[i].left + window.scrollX + 'px';
+            div.style.width = rects[i].width + 'px';
+            div.style.height = rects[i].height + 'px';
             this._wordRects.push(div);
         }
     }
@@ -308,14 +314,14 @@ BeneSpeak.SpeechData.prototype.highlightSentence = function(idx) {
         this._highlightedSentence = idx;
         var rects = this.sentences[idx].range.getClientRects();
         for (var i = 0; i < rects.length; i++) {
-            var div = document.createElement('div');
-            document.body.appendChild(div);
+            var div = this.document.createElement('div');
+            this.document.body.appendChild(div);
             div.className = BeneSpeak.sentenceHighlightClass;
             div.style.position = 'absolute';
-            div.style.top = rects[i].top + window.scrollY;
-            div.style.left = rects[i].left + window.scrollX;
-            div.style.width = rects[i].width;
-            div.style.height = rects[i].height;
+            div.style.top = rects[i].top + window.scrollY + 'px';
+            div.style.left = rects[i].left + window.scrollX + 'px';
+            div.style.width = rects[i].width + 'px';
+            div.style.height = rects[i].height + 'px';
             this._sentenceRects.push(div);
         }
     }
