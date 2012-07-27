@@ -182,7 +182,6 @@ var BeneSpeak = {
             }
             
             d.utterance += w.text;
-            d.utterance += '\n';
             d._wipStart = null;
         }
         
@@ -198,6 +197,8 @@ var BeneSpeak = {
             d._sipStart = null;
             d._sipOffset = 0;
         }
+        
+        d.utterance += '\n';
     },
     
     _elementStartAnnouncement: function(d, el) {
