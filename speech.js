@@ -19,6 +19,9 @@ var BeneSpeak = {
         this._wipStart = null;
         this._wordRects = [];
         this._sentenceRects = [];
+        
+        this.xOffset = 0;
+        this.yOffset = 0;
     },
     
     Fragment: function(range, offset) {
@@ -90,6 +93,7 @@ var BeneSpeak = {
                         
                         // test against sentence boundaries
                         if (this.SENTENCE_TERMINATORS.test(m[0]) == true) {
+                            d.utterance += ' ';
                             BeneSpeak._processSentenceBoundary(d, node, m);
                         }
                         
@@ -251,33 +255,14 @@ BeneSpeak.SpeechData.prototype.handleTtsEvent = function(event, callback) {
     
     if (event.type == 'word') {
         
-        for (var i = this._highlightedWord; i < this.words.length; i++) {
-            
-            if (i >= 0) {
-                if (event.charIndex < this.words[i].offset) {
-                    // char index is /before/ the selected word. hang here for now
-                    break;
-                }
-                
-                if (this.words[i].includes(event.charIndex)) {
-                    this.highlightWord(i);
-                    break;
-                }
-            }
+        var wordIndex = this.wordAt(event.charIndex);
+        if (wordIndex >= 0) {
+            this.highlightWord(wordIndex);
         }
         
-        for (var j = this._highlightedSentence; j < this.sentences.length; j++) {
-            
-            if (j >= 0) {
-                if (event.charIndex < this.sentences[j].offset) {
-                    break;
-                }
-                
-                if (this.sentences[j].includes(event.charIndex)) {
-                    this.highlightSentence(j);
-                    break;
-                }
-            }
+        var sentenceIndex = this.sentenceAt(event.charIndex);
+        if (sentenceIndex >= 0) {
+            this.highlightSentence(sentenceIndex);
         }
         
     } else if (event.type == 'interrupted' || event.type == 'end') {
@@ -300,8 +285,8 @@ BeneSpeak.SpeechData.prototype.highlightWord = function(idx) {
             this.document.body.appendChild(div);
             div.className = BeneSpeak.wordHighlightClass;
             div.style.position = 'absolute';
-            div.style.top = rects[i].top + window.scrollY + 'px';
-            div.style.left = rects[i].left + window.scrollX + 'px';
+            div.style.top = (rects[i].top + window.scrollY + this.yOffset) + 'px';
+            div.style.left = (rects[i].left + window.scrollX + this.xOffset) + 'px';
             div.style.width = rects[i].width + 'px';
             div.style.height = rects[i].height + 'px';
             this._wordRects.push(div);
@@ -319,13 +304,56 @@ BeneSpeak.SpeechData.prototype.highlightSentence = function(idx) {
             this.document.body.appendChild(div);
             div.className = BeneSpeak.sentenceHighlightClass;
             div.style.position = 'absolute';
-            div.style.top = rects[i].top + window.scrollY + 'px';
-            div.style.left = rects[i].left + window.scrollX + 'px';
+            div.style.top = (rects[i].top + window.scrollY + this.yOffset) + 'px';
+            div.style.left = (rects[i].left + window.scrollX + this.xOffset) + 'px';
             div.style.width = rects[i].width + 'px';
             div.style.height = rects[i].height + 'px';
             this._sentenceRects.push(div);
         }
     }
+};
+
+BeneSpeak.SpeechData.prototype._getOffset = function(s) {
+    if (s.slice(-2) == 'px') {
+        return 0 - parseInt(s.substring(0, s.length - 2));
+    } else {
+        return 0;
+    }
+        
+}
+
+// locates the index of the word at the given character offset.
+// When startFromBeginning is false (the default) it searches from
+// the 0 index, otherwise it starts at the currently-highlighted word.
+BeneSpeak.SpeechData.prototype.wordAt = function (charIndex, startFromBeginning) {
+    var startIndex = (startFromBeginning) ? 0 : (this._highlightedWord == -1) ? 0 : this._highlightedWord;
+    
+    for (var i = startIndex; i < this.words.length; i++) {
+        
+        if (charIndex < this.words[i].offset) {
+            return i - 1;
+        } if (this.words[i].includes(charIndex)) {
+            return i;
+        }
+    }
+    return -1;
+};
+
+// locates the index of the sentence at the given character offset.
+// When startFromBeginning is false (the default) it searches from
+// the 0 index, otherwise it starts at the currently-highlighted sentence.
+BeneSpeak.SpeechData.prototype.sentenceAt = function (charIndex, startFromBeginning) {
+    var startIndex = (startFromBeginning) ? 0 : (this._highlightedSentence == -1) ? 0 : this._highlightedSentence;
+    
+    for (var i = startIndex; i < this.sentences.length; i++) {
+        
+        if (charIndex < this.sentences[i].offset) {
+            return i - 1;
+        } else if (this.sentences[i].includes(charIndex)) {
+            return i;
+        }
+    }
+    return -1;
 };
 
 BeneSpeak.Fragment.prototype.includes = function (index) {
