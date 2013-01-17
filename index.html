@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html>
     <head>
         <title>Test page</title>
@@ -16,7 +17,13 @@
     </head>
     <body>
         <form>
+            <label for="speechInput"><b>HTML Input</b></label><br/>
             <textarea id="speechInput" rows="20" cols="60">Enter HTML markup to speak here.</textarea>
+            <br><br>
+            <label for="voice"><b>Voice</b></label><br>
+            <select id="voice"></select><br><br>
+            <label for="speechRate"><b>Speech Rate</b></label><br>
+            <input type="range" min="0.5" max="2" step="0.1" value="1" id="speechRate"><span id="speechRateDisplay">1</span>
         </form>
         <p>
         <input type="button" value="Start reading" id="speakButton">
