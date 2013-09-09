@@ -5,7 +5,6 @@ function speak() {
     chrome.tts.speak(data.utterance, {
     	rate : parseFloat(document.getElementById("speechRate").value),
     	voiceName : document.getElementById("voice").options[document.getElementById("voice").selectedIndex].value,
-    	desiredEventTypes : ['word'],
     	onEvent : function(event) { data.handleTtsEvent(event); }
 	});
 }

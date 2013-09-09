@@ -109,7 +109,7 @@ var BeneSpeak = {
     
     speak: function(element, callback) {
         var data = this.generateSpeechData(element);
-        chrome.tts.speak(data.utterance, { 'rate' : 1.25, 'desiredEventTypes' : ['word'], 'onEvent' : function(event) { data.handleTtsEvent(event, callback);}});
+        chrome.tts.speak(data.utterance, { 'rate' : 1.25, 'onEvent' : function(event) { data.handleTtsEvent(event, callback);}});
     },
     
     stop: function(j) {
